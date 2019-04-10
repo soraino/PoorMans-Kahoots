@@ -1,5 +1,6 @@
 package com.example.kahotsknockoff.adapter;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.support.annotation.NonNull;
@@ -17,10 +18,11 @@ import java.util.ArrayList;
 public class questionAdapter extends RecyclerView.Adapter<questionViewHolder> {
     private ArrayList<Question> questions;
     private Context mContext;
-
-    public questionAdapter(ArrayList<Question> questions, Context mContext) {
+    private Activity mActivity;
+    public questionAdapter(ArrayList<Question> questions, Context context, Activity activity) {
         this.questions = questions;
-        this.mContext = mContext;
+        this.mContext = context;
+        this.mActivity = activity;
     }
 
     @NonNull
@@ -41,6 +43,7 @@ public class questionAdapter extends RecyclerView.Adapter<questionViewHolder> {
                 Question q = questions.get(i);
                 intent.putExtra("question",q);
                 mContext.startActivity(intent);
+                mActivity.overridePendingTransition(R.animator.right_to_left,R.animator.right_from_left);
             }
         });
     }

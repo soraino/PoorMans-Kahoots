@@ -7,6 +7,11 @@ public class PostAnswer {
     private Long questionNo;
     private char choiceOption;
     private String comment;
+    private String email;
+
+    public String getEmail() {return email;}
+
+    public void setEmail(String email) {this.email = email;}
 
     public Long getQuestionNo() {
         return questionNo;

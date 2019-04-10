@@ -1,9 +1,13 @@
 package com.example.kahotsknockoff;
 
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.design.widget.Snackbar;
@@ -37,12 +41,31 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     private FirebaseUser mFirebaseUser;
     private static final int RC_SIGN_IN = 9001;
 
+    // Flag for checking if it is paused
+    private boolean isPaused = false;
+    private boolean isSettingActivity = false;
+
     // this is deprecated but the UI is nice so I am using it
     private ProgressDialog mProgressDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if(!isNetworkConnected()){
+            AlertDialog ad = new AlertDialog.Builder(this).create();
+            ad.setTitle("No Internet connection");
+            ad.setMessage("Please connect to the internet?");
+
+            ad.setButton(DialogInterface.BUTTON_POSITIVE,"Open Setting", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                    dialog.cancel();
+                }
+            });
+            ad.show();
+        }
+
         setContentView(R.layout.activity_login);
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestIdToken(getString(R.string.default_web_client_id))
@@ -66,6 +89,51 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
         }
 
     }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        isPaused = true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if(isPaused && isSettingActivity){
+            isSettingActivity = false;
+            isPaused = false;
+            if (!isNetworkConnected()) {
+                android.app.AlertDialog ad = new android.app.AlertDialog.Builder(this).create();
+                ad.setTitle("No Internet connection");
+                ad.setMessage("Please connect to the internet?");
+
+                ad.setButton(DialogInterface.BUTTON_POSITIVE, "Open Settings", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                        isSettingActivity = true;
+                        dialog.cancel();
+                    }
+                });
+                ad.show();
+            }
+
+            //Initialization of Firebase auth variables
+            mFirebaseUser = mFirebaseAuth.getCurrentUser();
+            if (FirebaseAuth.getInstance() == null) {
+                // Not signed in, launch the Sign In activity
+                startActivity(new Intent(this, LoginActivity.class));
+                finish();
+                return;
+            }
+        }
+    }
+
+    private boolean isNetworkConnected() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(this.CONNECTIVITY_SERVICE);
+        return cm.getActiveNetworkInfo() != null;
+    }
+
     //init and show progressDialog
     public void showProgressDialog() {
         if (mProgressDialog == null) {

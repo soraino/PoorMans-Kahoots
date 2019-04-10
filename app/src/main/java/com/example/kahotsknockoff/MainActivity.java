@@ -4,12 +4,15 @@ import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.os.AsyncTask;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -38,6 +41,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private ProgressDialog mProgressDialog;
     private Question currQuestion;
 
+    // Flag for checking if it is paused
+    private boolean isPaused = false;
+    private boolean isSettingActivity = false;
+
     //Create instance of firebase/google variables
     private FirebaseAuth mFirebaseAuth;
     private GoogleApiClient mGoogleClient;
@@ -52,8 +59,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        //getActionBar().setHomeButtonEnabled(true);
+        if(!isNetworkConnected()){
+            AlertDialog ad = new AlertDialog.Builder(this).create();
+            ad.setTitle("No Internet connection");
+            ad.setMessage("Please connect to the internet?");
+            ad.setButton(DialogInterface.BUTTON_POSITIVE,"Open Setting", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    Intent intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(intent);
+                    dialog.cancel();
+                }
+            });
+            ad.show();
+        }
+        // get the question data
         currQuestion = (Question)getIntent().getSerializableExtra("question");
+        // set up the action bar
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
         // get all the required ui elements
         Button btnA = (Button) findViewById(R.id.button_a);
@@ -89,6 +114,70 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        isPaused = true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if(isPaused && isSettingActivity){
+            isSettingActivity = false;
+            isPaused = false;
+            if (!isNetworkConnected()) {
+                android.app.AlertDialog ad = new android.app.AlertDialog.Builder(this).create();
+                ad.setTitle("No Internet connection");
+                ad.setMessage("Please connect to the internet?");
+
+                ad.setButton(DialogInterface.BUTTON_POSITIVE, "Open Settings", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                        isSettingActivity = true;
+                        dialog.cancel();
+                    }
+                });
+                ad.show();
+            }
+
+            //Initialization of Firebase auth variables
+            mFirebaseUser = mFirebaseAuth.getCurrentUser();
+            if (FirebaseAuth.getInstance() == null) {
+                // Not signed in, launch the Sign In activity
+                startActivity(new Intent(this, LoginActivity.class));
+                finish();
+                return;
+            }
+        }
+    }
+
+    private boolean isNetworkConnected() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(this.CONNECTIVITY_SERVICE);
+        return cm.getActiveNetworkInfo() != null;
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        if(this.isFinishing()){
+            this.overridePendingTransition(R.animator.left_to_right, R.animator.left_from_right);
+        }
+    }
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case android.R.id.home:
+                // Respond to the action bar's Up/Home button
+                Intent intent = new Intent(getApplicationContext(), QuestionListActivity.class);
+                startActivity(intent);
+                this.overridePendingTransition(R.animator.left_to_right, R.animator.left_from_right);
+                finish();
+                return false;
+        }
+        return super.onOptionsItemSelected(item);
+    }
     @Override
     public void onClick(View v) {
         Log.d("test","tesing");
@@ -133,6 +222,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         PostAnswer answer = new PostAnswer();
         answer.setChoiceOption(ans);
         answer.setComment(comment);
+        answer.setEmail(mFirebaseUser.getEmail());
         answer.setQuestionNo(currQuestion.getId());
         new PostRequest().execute(new GsonBuilder()
                 .serializeNulls()
@@ -171,7 +261,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             try{
                 RequestBody body = RequestBody.create(JSON,json[0]);
                 Request request = new Request.Builder()
-                        .url("http://7b783e8e.ngrok.io/clicker/select")
+                        .url("https://clicker-190408160713.azurewebsites.net/clicker/select")
                         .post(body)
                         .build();
                 Response response = client.newCall(request).execute();

@@ -3,8 +3,10 @@ package com.example.kahotsknockoff;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AlertDialog;
@@ -39,6 +41,10 @@ public class QuestionListActivity extends AppCompatActivity implements GoogleApi
     private RecyclerView.Adapter mAdapter;
     private ArrayList<Question> questions = new ArrayList<>();
 
+    // Flag for checking if it is paused
+    private boolean isPaused = false;
+    private boolean isSettingActivity = false;
+
     //set the user properties
     private final FirebaseAuth mFirebaseAuth = FirebaseAuth.getInstance();;
     private GoogleApiClient mGoogleClient;
@@ -58,7 +64,21 @@ public class QuestionListActivity extends AppCompatActivity implements GoogleApi
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_question_list);
+        if(!isNetworkConnected()){
+            android.app.AlertDialog ad = new android.app.AlertDialog.Builder(this).create();
+            ad.setTitle("No Internet connection");
+            ad.setMessage("Please connect to the internet?");
 
+            ad.setButton(DialogInterface.BUTTON_POSITIVE,"Open Settings", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                    isSettingActivity = true;
+                    dialog.cancel();
+                }
+            });
+            ad.show();
+        }
         //init all the user settings
         mGoogleClient = new GoogleApiClient.Builder(this)
                 .enableAutoManage(this /* FragmentActivity */, this /* OnConnectionFailedListener */)
@@ -72,15 +92,63 @@ public class QuestionListActivity extends AppCompatActivity implements GoogleApi
             finish();
             return;
         }
+        //set up the action bar
+        getSupportActionBar().setTitle(getSupportActionBar().getTitle()+" "+mFirebaseUser.getEmail());
+
         //set up the recycler view
         mRecyclerView = (RecyclerView) findViewById(R.id.question_list);
         mRecyclerView.setHasFixedSize(true);
         mRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        mAdapter = new questionAdapter(questions,QuestionListActivity.this);
+        mAdapter = new questionAdapter(questions,QuestionListActivity.this,this);
         mRecyclerView.setAdapter(mAdapter);
 
         new GetRequest().execute();
+    }
+    private boolean isNetworkConnected() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(this.CONNECTIVITY_SERVICE);
+        return cm.getActiveNetworkInfo() != null;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        isPaused = true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if(isPaused && isSettingActivity){
+            isSettingActivity = false;
+            isPaused = false;
+            if (!isNetworkConnected()) {
+                android.app.AlertDialog ad = new android.app.AlertDialog.Builder(this).create();
+                ad.setTitle("No Internet connection");
+                ad.setMessage("Please connect to the internet?");
+
+                ad.setButton(DialogInterface.BUTTON_POSITIVE, "Open Settings", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+                        isSettingActivity = true;
+                        dialog.cancel();
+                    }
+                });
+                ad.show();
+            }
+
+            //Initialization of Firebase auth variables
+            mFirebaseUser = mFirebaseAuth.getCurrentUser();
+            if (FirebaseAuth.getInstance() == null) {
+                // Not signed in, launch the Sign In activity
+                startActivity(new Intent(this, LoginActivity.class));
+                finish();
+                return;
+            }
+            //set up the recycler view
+            new GetRequest().execute();
+        }
     }
 
     //init and show progressDialog
@@ -163,7 +231,7 @@ public class QuestionListActivity extends AppCompatActivity implements GoogleApi
         @Override
         protected String doInBackground(String... params) {
             Request request  = new Request.Builder()
-                    .url("http://7b783e8e.ngrok.io/clicker/questions")
+                    .url("https://clicker-190408160713.azurewebsites.net/clicker/questions")
                     .build();
             try{
                 Response response = client.newCall(request).execute();
@@ -176,8 +244,13 @@ public class QuestionListActivity extends AppCompatActivity implements GoogleApi
 
         @Override
         protected void onPostExecute(String s) {
-            questions.addAll(Arrays.asList(new Gson().fromJson(s,Question[].class)));
-            mAdapter.notifyDataSetChanged();
+            if(s != null){
+                questions.addAll(Arrays.asList(new Gson().fromJson(s,Question[].class)));
+                mAdapter.notifyDataSetChanged();
+            }else{
+                Snackbar.make(findViewById(android.R.id.content), "An Error has occurred with the server", Snackbar.LENGTH_LONG).show();
+            }
+
         }
     }
 
